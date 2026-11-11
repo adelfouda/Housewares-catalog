@@ -1,10 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
-      return request.auth != null
+    function signedIn() { return request.auth != null; }
+    function isOwner() {
+      return signedIn()
         && exists(/databases/$(database)/documents/settings/owner)
         && get(/databases/$(database)/documents/settings/owner).data.uid == request.auth.uid;
+    }
+    function isAdmin() {
+      return isOwner() || (signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
 
     // الكتالوج: الضيف يشوف الظاهر بس، والأدمن يشوف ويعدّل كل حاجة
@@ -25,13 +29,27 @@ service cloud.firestore {
     match /privateProducts/{id} { allow read, write: if isAdmin(); }
     match /privateOffers/{id}   { allow read, write: if isAdmin(); }
 
-    // أول حساب يعتمد نفسه بيبقى الأدمن، ومحدش يقدر يغيّره بعد كده من التطبيق
+    // صاحب التطبيق: أول حساب يعتمد نفسه، ومينفعش يتغيّر من التطبيق
     match /settings/owner {
       allow read: if true;
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['uid', 'at']);
       allow update, delete: if false;
+    }
+
+    // المشرفين: صاحب التطبيق بس اللي يضيف ويشيل
+    match /admins/{uid} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow write: if isOwner();
+    }
+
+    // طلبات الإشراف: كل واحد يبعت طلبه لنفسه، وصاحب التطبيق يشوف ويوافق أو يرفض
+    match /adminRequests/{uid} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'name', 'at']);
+      allow delete: if isOwner() || (signedIn() && request.auth.uid == uid);
     }
   }
 }

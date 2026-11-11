@@ -1,7 +1,7 @@
 (function(){
   const CATS = ["أواني الطهي","أدوات المائدة","البلاستيك والتخزين","رفايع المطبخ","الأجهزة الصغيرة","أدوات التنظيف","جهاز العروسة","أخرى"];
   const S = {
-    mode: "guest", tab: "products", isAdmin: false, user: null, ownerUid: undefined,
+    mode: "guest", tab: "products", isAdmin: false, isOwner: false, user: null, ownerUid: undefined, adminDoc: false, myReq: null, team: { admins: [], requests: [] }, userUnsubs: [], teamUnsubs: [],
     products: [], offers: [], priv: { products: {}, offers: {} },
     loaded: { products: false, offers: false },
     db: null, auth: null, unsubs: [], filters: {}, imgCache: {}
@@ -61,7 +61,7 @@
   function route(){
     S.mode = location.hash === "#admin" ? "admin" : "guest";
     const adminOn = S.mode === "admin" && S.isAdmin;
-    const tabs = S.mode === "admin" ? [["products","المنتجات"],["offers","عروض التجار"],["prices","تعديل الأسعار"]] : [["products","المنتجات"],["offers","العروض"]];
+    const tabs = S.mode === "admin" ? [["products","المنتجات"],["offers","عروض التجار"],["prices","تعديل الأسعار"]].concat(S.isOwner ? [["team","المشرفين"]] : []) : [["products","المنتجات"],["offers","العروض"]];
     if (!tabs.some(t => t[0] === S.tab)) S.tab = "products";
     document.body.classList.toggle("admin", adminOn);
     $("roleTag").hidden = !adminOn;
@@ -72,7 +72,7 @@
     $("logout").hidden = !(S.mode === "admin" && S.user);
     $("tabs").innerHTML = adminOn || S.mode === "guest" ? tabs.map(([k,t]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${t}<span class="n" id="n-${k}"></span></button>`).join("") : "";
     $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; route(); });
-    $("fab").hidden = !(adminOn && S.tab !== "prices");
+    $("fab").hidden = !(adminOn && (S.tab === "products" || S.tab === "offers"));
     $("fab").textContent = S.tab === "offers" ? "+ إضافة عرض" : "+ إضافة منتج";
     subscribe();
     render(true);
@@ -117,7 +117,9 @@
     if (S.ownerUid === undefined) return `<div class="empty">جاري التحقق…</div>`;
     if (!S.user) return `<div class="empty"><b>لوحة الأدمن</b>سجّل دخول بحساب جوجل بتاعك عشان تتحكم في المنتجات والأسعار.<br><br><button class="btn primary" id="login">دخول بحساب جوجل</button></div>`;
     if (!S.ownerUid) return `<div class="empty"><b>أول تشغيل</b>إنت داخل بحساب<br><span class="ltr">${esc(S.user.email || "")}</span><br>الحساب ده هيبقى الأدمن الوحيد للتطبيق.<br><br><button class="btn primary" id="claim">اعتمد الحساب ده كأدمن</button></div>`;
-    return `<div class="empty"><b>الحساب ده مش أدمن</b><span class="ltr">${esc(S.user.email || "")}</span><br><br><button class="btn" id="out2">خروج</button> <a class="btn" href="#shop">ارجع للكتالوج</a></div>`;
+    const who = `<span class="ltr">${esc(S.user.email || "")}</span>`;
+    if (S.myReq) return `<div class="empty"><b>طلبك اتبعت</b>${who}<br>مستني موافقة صاحب التطبيق. أول ما يوافق، لوحة الأدمن هتفتح هنا لوحدها.<br><br><button class="btn" id="out2">خروج</button></div>`;
+    return `<div class="empty"><b>الحساب ده لسه مش أدمن</b>${who}<br>لو صاحب التطبيق عايزك تبقى أدمن، ابعتله طلب.<br><br><button class="btn primary" id="askAdmin">اطلب صلاحية أدمن</button> <button class="btn" id="out2">خروج</button></div>`;
   }
 
   function render(rebuild){
@@ -128,6 +130,7 @@
       if ($("login")) $("login").onclick = login;
       if ($("claim")) $("claim").onclick = claim;
       if ($("out2")) $("out2").onclick = () => S.auth.signOut();
+      if ($("askAdmin")) $("askAdmin").onclick = askAdmin;
       return;
     }
     if (rebuild || m.dataset.view !== S.mode + S.tab){
@@ -139,6 +142,7 @@
   }
 
   function shell(){
+    if (S.tab === "team") return `<div class="note info">أي حد عايز يبقى أدمن، يفتح لوحة الأدمن ويدخل بحساب جوجل بتاعه ويدوس «اطلب صلاحية أدمن». طلبه هيظهر هنا وتوافق عليه.</div><div id="team"></div>`;
     if (S.tab === "prices") return `
       <div class="note info">غيّر السعر أو الخصم في أي صف، والتغيير بيتحفظ لوحده أول ما تخرج من الخانة.</div>
       <div class="bulk">
@@ -194,6 +198,7 @@
   function fill(){
     if (S.mode === "admin" && !S.isAdmin) return;
     if (S.tab === "prices") return fillPrices();
+    if (S.tab === "team") return fillTeam();
     const out = $("out"); if (!out) return;
     const kind = S.tab === "products" ? "p" : "o";
     if (kind === "o" && $("merch")){
@@ -286,6 +291,41 @@
         closeSheet(); toast(`اتطبق على ${fmt(list.length)} منتج`);
       } catch(e){ $("c-yes").disabled = false; toast("التطبيق فشل، جرّب تاني"); }
     };
+  }
+
+  // ================= team =================
+  function watchTeam(){
+    S.teamUnsubs.forEach(u => u()); S.teamUnsubs = [];
+    if (!S.isOwner) return;
+    S.teamUnsubs.push(S.db.collection("admins").onSnapshot(sn => { S.team.admins = sn.docs.map(d => ({uid: d.id, ...d.data()})); if (S.tab === "team") fill(); }, () => {}));
+    S.teamUnsubs.push(S.db.collection("adminRequests").onSnapshot(sn => { S.team.requests = sn.docs.map(d => ({uid: d.id, ...d.data()})); if (S.tab === "team") fill(); }, () => {}));
+  }
+  function fillTeam(){
+    const box = $("team"); if (!box) return;
+    const row = (p, btns) => `<div class="item"><div class="info"><div class="name">${esc(p.name || p.email || "")}</div><div class="sub ltr">${esc(p.email || "")}</div></div><div class="tools">${btns}</div></div>`;
+    box.innerHTML = `
+      <h3 style="margin:16px 0 8px;font-size:15px">طلبات جديدة</h3>
+      <div class="list">${S.team.requests.length ? S.team.requests.map(r => row(r, `<button class="btn sm" data-rej="${esc(r.uid)}">رفض</button><button class="btn sm primary" data-ok="${esc(r.uid)}">موافقة</button>`)).join("") : `<div class="sub">مفيش طلبات دلوقتي</div>`}</div>
+      <h3 style="margin:18px 0 8px;font-size:15px">المشرفين</h3>
+      <div class="list">${row({name: "إنت · صاحب التطبيق", email: S.user && S.user.email}, "")}
+        ${S.team.admins.map(a => row(a, `<button class="btn sm danger" data-rm="${esc(a.uid)}">شيل</button>`)).join("")}</div>`;
+    box.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
+      const r = S.team.requests.find(x => x.uid === b.dataset.ok); b.disabled = true;
+      try { const bt = S.db.batch(); bt.set(S.db.collection("admins").doc(r.uid), {email: r.email || "", name: r.name || "", at: Date.now()}); bt.delete(S.db.collection("adminRequests").doc(r.uid)); await bt.commit(); toast("بقى أدمن"); }
+      catch(e){ b.disabled = false; toast("الموافقة فشلت، جرّب تاني"); }
+    });
+    box.querySelectorAll("[data-rej]").forEach(b => b.onclick = async () => { b.disabled = true; try { await S.db.collection("adminRequests").doc(b.dataset.rej).delete(); } catch(e){ b.disabled = false; toast("مقدرتش أرفض، جرّب تاني"); } });
+    box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+      const a = S.team.admins.find(x => x.uid === b.dataset.rm);
+      openSheet(`<h2>تشيل الصلاحية؟</h2><p>«${esc(a.name || a.email)}» مش هيقدر يعدّل في الكتالوج تاني.</p><div class="actions"><button class="btn" id="c-no">رجوع</button><button class="btn danger" id="c-yes">شيل</button></div>`);
+      $("c-no").onclick = closeSheet;
+      $("c-yes").onclick = async () => { $("c-yes").disabled = true; try { await S.db.collection("admins").doc(a.uid).delete(); closeSheet(); toast("اتشالت الصلاحية"); } catch(e){ $("c-yes").disabled = false; toast("فشلت، جرّب تاني"); } };
+    });
+  }
+  async function askAdmin(){
+    const b = $("askAdmin"); if (b) b.disabled = true;
+    try { await S.db.collection("adminRequests").doc(S.user.uid).set({ email: S.user.email || "", name: S.user.displayName || "", at: Date.now() }); }
+    catch(e){ if (b) b.disabled = false; toast("الطلب مااتبعتش، جرّب تاني"); }
   }
 
   // ================= sheet =================
@@ -483,6 +523,15 @@
   }
   $("logout").onclick = () => S.auth.signOut();
 
+  function roles(){
+    const wasA = S.isAdmin, wasO = S.isOwner;
+    S.isOwner = !!(S.user && S.ownerUid && S.ownerUid === S.user.uid);
+    S.isAdmin = S.isOwner || !!(S.user && S.adminDoc);
+    if (wasA !== S.isAdmin) subKey = "";
+    if (wasO !== S.isOwner) watchTeam();
+    route();
+  }
+
   // ================= start =================
   (function init(){
     const cfg = window.FIREBASE_CONFIG;
@@ -497,14 +546,16 @@
     S.auth.getRedirectResult().catch(()=>{});
     S.db.collection("settings").doc("owner").onSnapshot(d => {
       S.ownerUid = d.exists ? d.data().uid : null;
-      const was = S.isAdmin; S.isAdmin = !!(S.user && S.ownerUid === S.user.uid);
-      if (was !== S.isAdmin) subKey = ""; route();
+      roles();
     }, () => { S.ownerUid = null; route(); });
     S.auth.onAuthStateChanged(u => {
       S.user = u;
-      const was = S.isAdmin; S.isAdmin = !!(u && S.ownerUid && S.ownerUid === u.uid);
-      if (was !== S.isAdmin) subKey = "";
-      route();
+      S.userUnsubs.forEach(f => f()); S.userUnsubs = []; S.adminDoc = false; S.myReq = null;
+      if (u){
+        S.userUnsubs.push(S.db.collection("admins").doc(u.uid).onSnapshot(d => { S.adminDoc = d.exists; roles(); }, () => { S.adminDoc = false; roles(); }));
+        S.userUnsubs.push(S.db.collection("adminRequests").doc(u.uid).onSnapshot(d => { S.myReq = d.exists ? d.data() : null; roles(); }, () => {}));
+      }
+      roles();
     });
     route();
   })();
