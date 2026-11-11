@@ -4,6 +4,6 @@
     "public": ".",
     "ignore": ["firebase.json", "firestore.rules", "firestore.indexes.json", "**/.*", "**/node_modules/**",
                "README.md", "CLAUDE.md", "setup.js", "setup.cmd", "publish.cmd", "deploy-log.txt"],
-    "headers": [ { "source": "**/*.@(html|js|json)", "headers": [ { "key": "Cache-Control", "value": "no-cache" } ] } ]
+    "headers": [ { "source": "/sw.js", "headers": [ { "key": "Cache-Control", "value": "no-cache" } ] }, { "source": "**/*.@(html|js|json)", "headers": [ { "key": "Cache-Control", "value": "no-cache" } ] } ]
   }
 }

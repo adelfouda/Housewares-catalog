@@ -533,6 +533,26 @@
     route();
   }
 
+  // ================= install =================
+  (function(){
+    if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    if (standalone) return;
+    let deferred = null;
+    window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; $("install").hidden = false; });
+    window.addEventListener("appinstalled", () => { $("install").hidden = true; toast("التطبيق اتثبت"); });
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (ios) $("install").hidden = false;
+    $("install").onclick = async () => {
+      if (deferred){ deferred.prompt(); await deferred.userChoice.catch(()=>{}); deferred = null; $("install").hidden = true; return; }
+      openSheet(`<h2>تثبيت التطبيق</h2>${ios
+        ? `<ol style="line-height:2"><li>دوس على زرار المشاركة تحت في سفاري.</li><li>اختار «إضافة إلى الشاشة الرئيسية».</li><li>دوس «إضافة».</li></ol>`
+        : `<p>افتح القايمة بتاعة المتصفح، واختار «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</p>`}
+        <div class="actions"><button class="btn primary" id="ins-ok">تمام</button></div>`);
+      $("ins-ok").onclick = closeSheet;
+    };
+  })();
+
   // ================= start =================
   (function init(){
     const cfg = window.FIREBASE_CONFIG;
