@@ -48,7 +48,8 @@ service cloud.firestore {
     match /adminRequests/{uid} {
       allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['email', 'name', 'at']);
+        && request.resource.data.keys().hasOnly(['email', 'name', 'at'])
+        && request.resource.data.email == request.auth.token.email;
       allow delete: if isOwner() || (signedIn() && request.auth.uid == uid);
     }
   }
