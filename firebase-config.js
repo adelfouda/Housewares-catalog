@@ -1,2 +1,1 @@
-// بيتملي تلقائيًا من setup.js
-window.FIREBASE_CONFIG = { apiKey: "PUT_API_KEY_HERE" };
+window.FIREBASE_CONFIG = {"projectId":"housewares-catalog-adel","appId":"1:1097970559853:web:e2ad9eab85047d170f0864","storageBucket":"housewares-catalog-adel.firebasestorage.app","apiKey":"AIzaSyBo3MvNBnMx2HLEB0tZoj57NRP5zbW1tH8","authDomain":"housewares-catalog-adel.firebaseapp.com","messagingSenderId":"1097970559853","projectNumber":"1097970559853","version":"2"};
