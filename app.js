@@ -89,7 +89,8 @@
     subKey = key;
     S.unsubs.forEach(u => u()); S.unsubs = [];
     S.loaded = { products: false, offers: false };
-    const timer = setTimeout(() => status("البيانات مش بتوصل دلوقتي، ممكن النت ضعيف."), 10000);
+    clearTimeout(S.loadTimer); status("");
+    const timer = S.loadTimer = setTimeout(() => { if (!S.loaded.products || !S.loaded.offers) status("البيانات مش بتوصل دلوقتي، ممكن النت ضعيف."); }, 10000);
     ["products","offers"].forEach(col => {
       let q = S.db.collection(col);
       if (!adminData) q = q.where("visible", "==", true);
