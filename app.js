@@ -70,6 +70,7 @@
     $("switch").textContent = S.mode === "admin" ? "عرض كضيف" : "لوحة الأدمن";
     $("switch").setAttribute("href", S.mode === "admin" ? "#shop" : "#admin");
     $("logout").hidden = !(S.mode === "admin" && S.user);
+    $("foot").hidden = S.mode === "admin";
     $("tabs").innerHTML = adminOn || S.mode === "guest" ? tabs.map(([k,t]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${t}<span class="n" id="n-${k}"></span></button>`).join("") : "";
     $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; route(); });
     $("fab").hidden = !(adminOn && (S.tab === "products" || S.tab === "offers"));
