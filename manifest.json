@@ -1,0 +1,8 @@
+{
+  "name": "كتالوج الأدوات المنزلية",
+  "short_name": "الكتالوج",
+  "lang": "ar", "dir": "rtl",
+  "start_url": "./", "display": "standalone",
+  "background_color": "#f6f4ef", "theme_color": "#0f6b5c",
+  "icons": [ { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" } ]
+}

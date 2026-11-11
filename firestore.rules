@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/settings/owner)
+        && get(/databases/$(database)/documents/settings/owner).data.uid == request.auth.uid;
+    }
+
+    // الكتالوج: الضيف يشوف الظاهر بس، والأدمن يشوف ويعدّل كل حاجة
+    match /products/{id} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /offers/{id} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /images/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // بيانات الأدمن الخاصة: سعر الشراء والمورد والتليفون والملاحظات
+    match /privateProducts/{id} { allow read, write: if isAdmin(); }
+    match /privateOffers/{id}   { allow read, write: if isAdmin(); }
+
+    // أول حساب يعتمد نفسه بيبقى الأدمن، ومحدش يقدر يغيّره بعد كده من التطبيق
+    match /settings/owner {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'at']);
+      allow update, delete: if false;
+    }
+  }
+}
